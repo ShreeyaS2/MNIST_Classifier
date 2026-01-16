@@ -60,7 +60,13 @@ Result: He initialization consistently outperformed naive random initialization.
 ## Metrics Tracked
 
 #### Training loss vs iterations
+
+<img width="1000" height="400" alt="training_loss" src="https://github.com/user-attachments/assets/28ee540c-f4ba-4725-bb2a-da2f836d8969" />
+
 #### Training accuracy vs iterations
+
+<img width="1000" height="400" alt="training_accuracy" src="https://github.com/user-attachments/assets/a21aa34c-a6e7-4b30-981b-fe0ad591e6b3" />
+
 
 These metrics are plotted automatically during training and used to compare experiments.
 
