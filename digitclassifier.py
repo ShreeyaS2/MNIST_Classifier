@@ -4,8 +4,14 @@ import tkinter as tk
 from PIL import Image, ImageDraw, ImageOps
 import matplotlib.pyplot as plt
 
+def load_and_train(config):
+    alpha = config["learning_rate"]
+    l2_lambda = config["l2_lambda"]
+    init_type = config["init"]
 
-def load_and_train():
+    train_acc_history=[]
+    train_loss_history=[]
+    
     print("Loading data and training model... Please wait.")
     
     # Load data (Adjust path if necessary)
@@ -24,22 +30,33 @@ def load_and_train():
     X_train = data_train[1:n] / 255.0
 
     # Initialize (Optimized for ReLU)
-    def initialize_params():
-        W1 = np.random.rand(128, 784) - 0.5
+    def initialize_params(init_type):
+        if init_type == "random":
+            W1 = np.random.rand(128, 784) - 0.5
+            W2 = np.random.rand(10, 128) - 0.5
+        elif init_type == "he":
+            W1 = np.random.randn(128, 784) * np.sqrt(2 / 784)
+            W2 = np.random.randn(10, 128) * np.sqrt(2 / 128)
+
         b1 = np.zeros((128, 1))
-        W2 = np.random.rand(10, 128) - 0.5
         b2 = np.zeros((10, 1))
         return W1, b1, W2, b2
+    
 
     def ReLU(Z):
         return np.maximum(Z, 0)
 
     def softmax(Z):
-        expZ = np.exp(Z - np.max(Z))
-        return expZ / sum(expZ)
-    
+        expZ = np.exp(Z - np.max(Z, axis=0, keepdims=True))
+        return expZ /np.sum(expZ, axis=0, keepdims=True)
+
     def relu_derivative(Z):
         return Z > 0
+    
+    def cross_entropy_loss(A2, Y):
+        m = Y.size
+        log_probs = -np.log(A2[Y, np.arange(m)] + 1e-8)
+        return np.sum(log_probs) / m
 
     def one_hot(Y):
         one_hot_Y = np.zeros((Y.size, Y.max() + 1))
@@ -79,8 +96,7 @@ def load_and_train():
         return np.sum(predictions == Y) / Y.size
 
     # Training Loop - gradient descent 
-    W1, b1, W2, b2 = initialize_params()
-    alpha = 0.05
+    W1, b1, W2, b2 = initialize_params(init_type)
     iterations = 1000 # Keep it short for demo, increase for better accuracy
     
     for i in range(iterations):
@@ -88,14 +104,17 @@ def load_and_train():
         dW1, db1, dW2, db2 = backward_prop(Z1, A1, A2, W2, X_train, Y_train)
         W1, b1, W2, b2 = update_params(W1, b1, W2, b2, dW1, db1, dW2, db2, alpha)
         if i % 100 == 0:
-            print(f"Iteration: {i}, Error: {get_accuracy(get_predictions(A2), Y_train):.4f}")
+            loss= cross_entropy_loss(A2, Y_train)
+            print(f"Iteration: {i}, Accuracy: {get_accuracy(get_predictions(A2), Y_train):.4f}")
+            train_loss_history.append(loss)
+            train_acc_history.append(get_accuracy(get_predictions(A2), Y_train))
 
     print("Training Complete!")
-    return W1, b1, W2, b2, forward_prop
+    return W1, b1, W2, b2, forward_prop,train_loss_history, train_acc_history
 
 
 class DigitApp:
-    def __init__(self, root, W1, b1, W2, b2, forward_prop_func):
+    def __init__(self, root, W1, b1, W2, b2, forward_prop_func, train_loss_history, train_acc_history):
         self.root = root
         self.root.title("Draw a Digit")
         
@@ -162,13 +181,58 @@ class DigitApp:
         # 5. Show Result
         self.label_result.config(text=f"Prediction: {prediction[0]}")
         
+        # Optional: Debug - show what the network sees
+        # plt.imshow(img_array, cmap='gray')
+        # plt.show()
+
+
 
 if __name__ == "__main__":
     # 1. Train the model
-    trained_W1, trained_b1, trained_W2, trained_b2, fp_func = load_and_train()
+    experiments = {
+    "Random Init": {
+        "init": "random",
+        "learning_rate": 0.05,
+        "l2_lambda": 0.0
+        },
+    "He Init": {
+        "init": "he",
+        "learning_rate": 0.05,
+        "l2_lambda": 0.0
+        }
+    }
+    results = {}
+    for exp_name, config in experiments.items():
+        print(f"Running Experiment: {exp_name}")
+        trained_W1, trained_b1, trained_W2, trained_b2, fp_func, train_loss_history, train_acc_history = load_and_train(config)
+        results[exp_name] = {
+            "loss": train_loss_history,
+            "accuracy": train_acc_history
+        }
+        
+    plt.figure(figsize=(10,4))
+    for name in results:
+        plt.plot(results[name]["loss"], label=name)
+
+    plt.title("Training Loss Comparison")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+
+
+    plt.figure(figsize=(10,4))
+    for name in results:
+        plt.plot(results[name]["accuracy"], label=name)
+
+    plt.title("Training Accuracy Comparison")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.legend()
+    plt.show()
 
     # 2. Start the App
+    best_exp = "He Init"
+    trained_W1, trained_b1, trained_W2, trained_b2, fp_func, _, _ = load_and_train(experiments[best_exp])
     root = tk.Tk()
-    app = DigitApp(root, trained_W1, trained_b1, trained_W2, trained_b2, fp_func)
-
+    app = DigitApp(root, trained_W1, trained_b1, trained_W2, trained_b2, fp_func, train_loss_history, train_acc_history)
     root.mainloop()
